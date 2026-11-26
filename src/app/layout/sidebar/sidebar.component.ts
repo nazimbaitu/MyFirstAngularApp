@@ -7,7 +7,7 @@ import { NotificationService } from '../../core/services/notification.service';
 @Component({ selector:'app-sidebar', standalone:true, imports:[AsyncPipe,RouterLink,RouterLinkActive], template:`
 @if (layout.sidebarOpen$ | async) { <div class="sidebar-overlay" (click)="layout.closeSidebar()"></div> }
 <aside class="sidebar" [class.open]="(layout.sidebarOpen$ | async)">
-<div class="brand">@if (settings.logo) { <img [src]="settings.logo" alt="Logo"> } @else { <i class="fas fa-store brand-icon"></i> }<div><strong>{{settings.shopName}}</strong><small>Management</small></div></div>
+<div class="brand"><i class="fas fa-store brand-icon"></i><div><strong>{{settings.shopName}}</strong><small>Management</small></div></div>
 <nav>
 <a routerLink="/dashboard" routerLinkActive="active" (click)="layout.closeSidebar()"><i class="fas fa-chart-pie"></i><span>Dashboard</span></a>
 <div class="nav-group"><small><i class="fas fa-users"></i> Customers</small><a routerLink="/customers" routerLinkActive="active" (click)="layout.closeSidebar()"><i class="fas fa-list"></i> All Customers</a><a routerLink="/customers/add" routerLinkActive="active" (click)="layout.closeSidebar()"><i class="fas fa-user-plus"></i> Add Customer</a></div>
@@ -18,8 +18,8 @@ import { NotificationService } from '../../core/services/notification.service';
 <a routerLink="/notifications" routerLinkActive="active" (click)="layout.closeSidebar()"><i class="fas fa-bell"></i><span>Notifications</span>@if ((notificationService.unreadCount$|async)||0; as count) { <b class="nav-badge">{{count>99?'99+':count}}</b> }</a>
 <div class="nav-group"><small><i class="fas fa-cog"></i> Settings</small><a routerLink="/settings/shop" routerLinkActive="active" (click)="layout.closeSidebar()"><i class="fas fa-store-alt"></i> Shop Settings</a><a routerLink="/settings/receipt" routerLinkActive="active" (click)="layout.closeSidebar()"><i class="fas fa-receipt"></i> Receipt Settings</a></div>
 <a routerLink="/profile" routerLinkActive="active" (click)="layout.closeSidebar()"><i class="fas fa-user-circle"></i> My Profile</a>
-</nav><div class="sidebar-footer"><i class="fas fa-flask"></i> Demo mode — localStorage</div></aside>` })
+</nav><div class="sidebar-footer"><i class="fas fa-database"></i> Connected to ShopKhata API</div></aside>` })
 export class SidebarComponent {
   layout=inject(LayoutService); notificationService=inject(NotificationService);
-  private data=inject(DataService); settings=this.data.getSettings();
+  private data=inject(DataService); get settings(){return this.data.getSettings();}
 }

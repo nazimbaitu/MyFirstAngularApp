@@ -1,19 +1,56 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { FormsModule } from '@angular/forms';
 import { LayoutService } from '../../../core/services/layout.service';
 import { DataService } from '../../../core/services/data.service';
 import { ModalService } from '../../../core/services/modal.service';
-import { NotificationService } from '../../../core/services/notification.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { ApiService, apiErrorMessage } from '../../../core/services/api.service';
 import { Employee } from '../../../core/models/employee.model';
-import { esc, fmtDate } from '../../../core/utils/formatters';
-@Component({selector:'app-employee-list',standalone:true,imports:[RouterLink,FormsModule],template:`
-<div class="page-head"><h1>Employees</h1><a class="btn btn-primary" routerLink="/employees/add"><i class="fas fa-user-plus"></i> Add Employee</a></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>ID</th><th>Name</th><th>Username</th><th>Mobile</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>@for(e of employees;track e.id){<tr><td>{{e.id}}</td><td>{{e.name}}</td><td>{{e.username}}</td><td>{{e.mobile||'—'}}</td><td><span class="pill" [class.pill-admin]="e.role==='Owner / Admin'" [class.pill-cashier]="e.role==='Employee / Cashier'">{{e.role==='Owner / Admin'?'Admin':'Cashier'}}</span></td><td><span class="pill" [class.pill-active]="e.status==='Active'" [class.pill-inactive]="e.status==='Inactive'">{{e.status}}</span></td><td>{{fmtDate(e.createdDate)}}</td><td><button class="btn btn-xs btn-outline" (click)="edit(e)">Edit</button><button class="btn btn-xs btn-outline" (click)="toggle(e)">{{e.status==='Active'?'Deactivate':'Activate'}}</button></td></tr>}</tbody></table></div><div class="card"><h3 class="card-title"><i class="fas fa-shield-alt"></i> Role Permissions (Demo)</h3><p><b>Owner / Admin:</b> Full access to all ShopKhata features.</p><p><b>Employee / Cashier:</b> Limited cashier access for customers, khata entries and payments.</p><p class="text-muted">Frontend role checks are for demonstration only. Real security must be enforced by the backend API.</p></div>`})
+import { fmtDate } from '../../../core/utils/formatters';
+import { firstValueFrom } from 'rxjs';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+
+@Component({
+  selector: 'app-employee-list',
+  standalone: true,
+  imports: [RouterLink, EmptyStateComponent],
+  template: `
+    <div class="page-head"><h1>Employees</h1><a class="btn btn-primary" routerLink="/employees/add"><i class="fas fa-user-plus"></i> Add Employee</a></div>
+    @if (employees.length) {
+      <div class="card table-wrap"><table class="data-table"><thead><tr><th>ID</th><th>Name</th><th>Username</th><th>Mobile</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>
+      @for(e of employees;track e.id){<tr><td>{{e.id}}</td><td>{{e.name}}</td><td>{{e.username}}</td><td>{{e.mobile||'—'}}</td><td><span class="pill" [class.pill-admin]="e.role==='Owner / Admin'" [class.pill-cashier]="e.role==='Employee / Cashier'">{{e.role==='Owner / Admin'?'Admin':'Cashier'}}</span></td><td><span class="pill" [class.pill-active]="e.status==='Active'" [class.pill-inactive]="e.status==='Inactive'">{{e.status}}</span></td><td>{{fmtDate(e.createdDate)}}</td><td><button class="btn btn-xs btn-outline" (click)="toggle(e)">{{e.status==='Active'?'Deactivate':'Activate'}}</button></td></tr>}
+      </tbody></table></div>
+    } @else {
+      <app-empty-state icon="fa-users" title="No employees found" message="Add an employee to get started."></app-empty-state>
+    }
+    <div class="card"><h3 class="card-title"><i class="fas fa-shield-alt"></i> Role Permissions</h3><p><b>Owner / Admin:</b> Full access to owner-only API operations.</p><p><b>Employee / Cashier:</b> Access is enforced by the API.</p></div>
+  `,
+})
 export class EmployeeListComponent implements OnInit {
-  private layout=inject(LayoutService);private data=inject(DataService);private modal=inject(ModalService);private notifications=inject(NotificationService);private toast=inject(ToastService);employees=this.data.getEmployees();fmtDate=fmtDate;
-  ngOnInit(){this.layout.setTitle('Employees');}
-  edit(e:Employee){this.modal.open({title:`Edit ${esc(e.name)}`,body:`<div class="form-grid"><div class="form-group"><label>Name</label><input id="emp-name" value="${esc(e.name)}"></div><div class="form-group"><label>Username</label><input id="emp-user" value="${esc(e.username)}"></div><div class="form-group"><label>Mobile</label><input id="emp-mobile" value="${esc(e.mobile||'')}"></div><div class="form-group"><label>Role</label><select id="emp-role"><option${e.role==='Owner / Admin'?' selected':''}>Owner / Admin</option><option${e.role==='Employee / Cashier'?' selected':''}>Employee / Cashier</option></select></div><div class="form-group"><label>Status</label><select id="emp-status"><option${e.status==='Active'?' selected':''}>Active</option><option${e.status==='Inactive'?' selected':''}>Inactive</option></select></div></div>`,buttons:[{label:'Cancel',className:'btn-outline',close:true},{label:'Save',className:'btn-primary',close:true,onClick:()=>this.saveEdit(e)}]});}
-  saveEdit(e:Employee){const get=(id:string)=>(document.getElementById(id) as HTMLInputElement|null)?.value||'';const list=this.data.getEmployees();const i=list.findIndex(x=>x.id===e.id);if(i>=0){list[i]={...list[i],name:get('emp-name').trim(),username:get('emp-user').trim(),mobile:get('emp-mobile').trim(),role:get('emp-role')==='Owner / Admin'?'Owner / Admin':'Employee / Cashier',status:get('emp-status')==='Active'?'Active':'Inactive'};this.data.saveEmployees(list);this.employees=list;this.notifications.add('info','Employee Updated',`${e.name} was updated.`);this.toast.show('Employee Saved','Changes saved successfully','success');}}
-  toggle(e:Employee){const next=e.status==='Active'?'Inactive':'Active';this.modal.confirm(`Set ${e.name} to ${next}?`,`Change employee status to ${next}?`,()=>{const list=this.data.getEmployees();const i=list.findIndex(x=>x.id===e.id);if(i>=0){list[i]={...list[i],status:next};this.data.saveEmployees(list);this.employees=list;this.notifications.add('info','Employee Status Changed',`${e.name} is now ${next}.`);this.toast.show('Status Updated',`${e.name} is now ${next}`,'success');}});}
+  private readonly layout = inject(LayoutService);
+  private readonly data = inject(DataService);
+  private readonly modal = inject(ModalService);
+  private readonly toast = inject(ToastService);
+  private readonly api = inject(ApiService);
+  employees: Employee[] = [];
+  readonly fmtDate = fmtDate;
+
+  ngOnInit(): void {
+    this.layout.setTitle('Employees');
+    this.employees = this.data.getEmployees();
+  }
+
+  toggle(employee: Employee): void {
+    const next = employee.status === 'Active' ? 'Inactive' : 'Active';
+    const status = next === 'Inactive' ? 1 : 0;
+    this.modal.confirm(`Set ${employee.name} to ${next}?`, `Change employee status to ${next}?`, async () => {
+      try {
+        await firstValueFrom(this.api.patch<void>(`/employees/${employee.id}/status?status=${status}`, {}));
+        this.employees = await firstValueFrom(this.data.reloadEmployees());
+        this.toast.show('Status Updated', `${employee.name} is now ${next}.`, 'success');
+      } catch (error) {
+        this.toast.show('Update Failed', apiErrorMessage(error), 'error');
+      }
+    });
+  }
 }

@@ -83,14 +83,20 @@ public sealed class TransactionHandlers(IApplicationDbContext db, ICurrentUser c
         var entity = new KhataTransaction(current.ShopId!.Value, request.CustomerId, $"KH-{Guid.NewGuid():N}"[..15],
             request.DateTimeUtc ?? DateTime.UtcNow, current.UserId ?? Guid.Empty, request.Notes);
         foreach (var item in request.Items) entity.AddItem(item.Description, item.Quantity, item.UnitPrice);
-        db.Transactions.Add(entity); await db.SaveChangesAsync(ct);
+        db.Transactions.Add(entity);
+        db.Notifications.Add(new ShopNotification(entity.ShopId, "New Khata Entry",
+            $"A khata entry of {entity.Total:0.00} was recorded."));
+        await db.SaveChangesAsync(ct);
         return Map(entity);
     }
     public async Task<bool> Handle(CancelTransactionCommand request, CancellationToken ct)
     {
         var entity = await db.Transactions.FirstOrDefaultAsync(x => x.Id == request.Id && x.ShopId == current.ShopId, ct);
         if (entity is null) return false;
-        entity.Cancel(); await db.SaveChangesAsync(ct); return true;
+        entity.Cancel();
+        db.Notifications.Add(new ShopNotification(entity.ShopId, "Transaction Reversed",
+            $"Transaction {entity.Reference} was cancelled."));
+        await db.SaveChangesAsync(ct); return true;
     }
     private static TransactionDto Map(KhataTransaction x) => new(x.Id, x.Reference, x.CustomerId, x.DateTimeUtc,
         x.Items.Select(i => new TransactionItemDto(i.Description, i.Quantity, i.UnitPrice, i.Total)).ToList(),
@@ -119,7 +125,10 @@ public sealed class PaymentHandlers(IApplicationDbContext db, ICurrentUser curre
         var payment = new Payment(current.ShopId!.Value, request.CustomerId, $"PM-{Guid.NewGuid():N}"[..15],
             request.Amount, request.DateTimeUtc ?? DateTime.UtcNow, request.Method, current.UserId ?? Guid.Empty,
             request.ReferenceNumber, request.Notes);
-        db.Payments.Add(payment); await db.SaveChangesAsync(ct);
+        db.Payments.Add(payment);
+        db.Notifications.Add(new ShopNotification(payment.ShopId, "Payment Received",
+            $"A payment of {payment.Amount:0.00} was recorded."));
+        await db.SaveChangesAsync(ct);
         return new PaymentDto(payment.Id, payment.Reference, payment.CustomerId, payment.Amount, payment.DateTimeUtc,
             payment.Method, payment.ReferenceNumber, payment.Notes, payment.CreatedBy);
     }
@@ -194,7 +203,7 @@ public sealed class ProfileHandlers(IApplicationDbContext db, ICurrentUser curre
 
 public sealed record GetShopSettingsQuery : IRequest<ShopSettingsDto>;
 public sealed record UpdateShopSettingsCommand(string ShopName, string? Phone, string Currency, string? Address,
-    string? ReceiptFooter) : IRequest<ShopSettingsDto>;
+    string? ReceiptFooter, bool ShowMobile = true, bool ShowAddress = true, bool ShowFooter = true) : IRequest<ShopSettingsDto>;
 public sealed class SettingsHandlers(IApplicationDbContext db, ICurrentUser current) :
     IRequestHandler<GetShopSettingsQuery, ShopSettingsDto>,
     IRequestHandler<UpdateShopSettingsCommand, ShopSettingsDto>
@@ -212,10 +221,13 @@ public sealed class SettingsHandlers(IApplicationDbContext db, ICurrentUser curr
         if (string.IsNullOrWhiteSpace(request.ShopName)) throw new ArgumentException("Shop name is required.");
         shop.UpdateDetails(request.ShopName, request.Phone);
         shop.EnsureSettings();
-        shop.Settings!.Update(request.Currency, request.Address, request.ReceiptFooter);
+        shop.Settings!.Update(request.Currency, request.Address, request.ReceiptFooter,
+            request.ShowMobile, request.ShowAddress, request.ShowFooter);
         await db.SaveChangesAsync(ct); return Map(shop);
     }
-    private static ShopSettingsDto Map(Shop s) => new(s.Name, s.Phone, s.Settings?.Currency ?? "INR", s.Settings?.Address, s.Settings?.ReceiptFooter);
+    private static ShopSettingsDto Map(Shop s) => new(s.Name, s.Phone, s.Settings?.Currency ?? "INR",
+        s.Settings?.Address, s.Settings?.ReceiptFooter, s.Settings?.ShowMobile ?? true,
+        s.Settings?.ShowAddress ?? true, s.Settings?.ShowFooter ?? true);
 }
 
 public sealed record GetNotificationsQuery : IRequest<IReadOnlyList<NotificationDto>>;
@@ -245,22 +257,38 @@ public sealed class ReportHandlers(IApplicationDbContext db, ICurrentUser curren
 {
     public async Task<IReadOnlyList<OutstandingDto>> Handle(GetOutstandingQuery request, CancellationToken ct)
     {
-        var customers = await db.Customers.AsNoTracking().Where(x => x.ShopId == current.ShopId && x.Status == RecordStatus.Active)
-            .Include(x => x.Transactions).Include(x => x.Payments).ToListAsync(ct);
-        return customers.Select(c => new OutstandingDto(c.Id, c.Name, c.Mobile,
-            c.OpeningBalance + c.Transactions.Where(t => t.Status == TransactionStatus.Completed).Sum(t => t.Total)
-            - c.Payments.Sum(p => p.Amount))).ToList();
+        var customers = await db.Customers.AsNoTracking()
+            .Where(x => x.ShopId == current.ShopId && x.Status == RecordStatus.Active).ToListAsync(ct);
+        var customerIds = customers.Select(x => x.Id).ToList();
+        var transactions = await db.Transactions.AsNoTracking().Include(x => x.Items)
+            .Where(x => x.ShopId == current.ShopId && customerIds.Contains(x.CustomerId) &&
+                x.Status == TransactionStatus.Completed && !x.Reversed).ToListAsync(ct);
+        var transactionTotals = transactions.GroupBy(x => x.CustomerId)
+            .ToDictionary(group => group.Key, group => group.SelectMany(x => x.Items).Sum(item => item.Total));
+        var paymentTotals = await db.Payments.AsNoTracking()
+            .Where(x => x.ShopId == current.ShopId && customerIds.Contains(x.CustomerId))
+            .GroupBy(x => x.CustomerId)
+            .Select(group => new { CustomerId = group.Key, Total = group.Sum(x => x.Amount) })
+            .ToDictionaryAsync(x => x.CustomerId, x => x.Total, ct);
+        return customers.Select(customer => new OutstandingDto(customer.Id, customer.Name, customer.Mobile,
+            customer.OpeningBalance + transactionTotals.GetValueOrDefault(customer.Id) -
+            paymentTotals.GetValueOrDefault(customer.Id))).ToList();
     }
     public async Task<ReportSummaryDto> Handle(GetDailySummaryQuery request, CancellationToken ct)
     {
         var date = request.Date ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var start = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var end = start.AddDays(1);
-        var sales = await db.Transactions.Where(x => x.ShopId == current.ShopId && x.Status == TransactionStatus.Completed && x.DateTimeUtc >= start && x.DateTimeUtc < end)
-            .Select(x => (decimal?)x.Items.Sum(i => i.Quantity * i.UnitPrice)).SumAsync(ct) ?? 0;
+        var sales = await db.Transactions
+            .Where(x => x.ShopId == current.ShopId && x.Status == TransactionStatus.Completed && !x.Reversed &&
+                x.DateTimeUtc >= start && x.DateTimeUtc < end)
+            .SelectMany(x => x.Items)
+            .Select(x => (decimal?)(x.Quantity * x.UnitPrice))
+            .SumAsync(ct) ?? 0;
         var payments = await db.Payments.Where(x => x.ShopId == current.ShopId && x.DateTimeUtc >= start && x.DateTimeUtc < end)
             .Select(x => (decimal?)x.Amount).SumAsync(ct) ?? 0;
-        var count = await db.Transactions.CountAsync(x => x.ShopId == current.ShopId && x.DateTimeUtc >= start && x.DateTimeUtc < end, ct);
+        var count = await db.Transactions.CountAsync(x => x.ShopId == current.ShopId && x.Status == TransactionStatus.Completed &&
+            !x.Reversed && x.DateTimeUtc >= start && x.DateTimeUtc < end, ct);
         var customers = await db.Customers.CountAsync(x => x.ShopId == current.ShopId && x.Status == RecordStatus.Active, ct);
         return new ReportSummaryDto(date, sales, payments, count, customers);
     }
@@ -269,11 +297,16 @@ public sealed class ReportHandlers(IApplicationDbContext db, ICurrentUser curren
     {
         var start = new DateTime(request.Year, request.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var end = start.AddMonths(1);
-        var sales = await db.Transactions.Where(x => x.ShopId == current.ShopId && x.Status == TransactionStatus.Completed && x.DateTimeUtc >= start && x.DateTimeUtc < end)
-            .Select(x => (decimal?)x.Items.Sum(i => i.Quantity * i.UnitPrice)).SumAsync(ct) ?? 0;
+        var sales = await db.Transactions
+            .Where(x => x.ShopId == current.ShopId && x.Status == TransactionStatus.Completed && !x.Reversed &&
+                x.DateTimeUtc >= start && x.DateTimeUtc < end)
+            .SelectMany(x => x.Items)
+            .Select(x => (decimal?)(x.Quantity * x.UnitPrice))
+            .SumAsync(ct) ?? 0;
         var payments = await db.Payments.Where(x => x.ShopId == current.ShopId && x.DateTimeUtc >= start && x.DateTimeUtc < end)
             .Select(x => (decimal?)x.Amount).SumAsync(ct) ?? 0;
-        var count = await db.Transactions.CountAsync(x => x.ShopId == current.ShopId && x.DateTimeUtc >= start && x.DateTimeUtc < end, ct);
+        var count = await db.Transactions.CountAsync(x => x.ShopId == current.ShopId && x.Status == TransactionStatus.Completed &&
+            !x.Reversed && x.DateTimeUtc >= start && x.DateTimeUtc < end, ct);
         var customers = await db.Customers.CountAsync(x => x.ShopId == current.ShopId && x.Status == RecordStatus.Active, ct);
         return new ReportSummaryDto(DateOnly.FromDateTime(start), sales, payments, count, customers);
     }

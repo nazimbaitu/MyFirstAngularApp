@@ -12,7 +12,8 @@ public sealed record PaymentDto(Guid Id, string Reference, Guid CustomerId, deci
     DateTime DateTimeUtc, PaymentMethod Method, string? ReferenceNumber, string? Notes, Guid CreatedBy);
 public sealed record EmployeeDto(Guid Id, string Name, string UserName, string? Mobile, EmployeeRole Role,
     RecordStatus Status, DateTime CreatedAtUtc);
-public sealed record ShopSettingsDto(string ShopName, string? Phone, string Currency, string? Address, string? ReceiptFooter);
+public sealed record ShopSettingsDto(string ShopName, string? Phone, string Currency, string? Address, string? ReceiptFooter,
+    bool ShowMobile, bool ShowAddress, bool ShowFooter);
 public sealed record NotificationDto(Guid Id, string Title, string Message, bool IsRead, DateTime CreatedAtUtc);
 public sealed record OutstandingDto(Guid CustomerId, string CustomerName, string Mobile, decimal Balance);
 public sealed record ReportSummaryDto(DateOnly Date, decimal Sales, decimal Payments, int Transactions, int Customers);

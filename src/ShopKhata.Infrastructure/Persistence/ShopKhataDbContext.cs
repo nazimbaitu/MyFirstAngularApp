@@ -34,6 +34,9 @@ public sealed class ShopKhataDbContext(DbContextOptions<ShopKhataDbContext> opti
             b.Property(x => x.Currency).HasMaxLength(3).IsRequired();
             b.Property(x => x.Address).HasMaxLength(500);
             b.Property(x => x.ReceiptFooter).HasMaxLength(500);
+            b.Property(x => x.ShowMobile).HasDefaultValue(true);
+            b.Property(x => x.ShowAddress).HasDefaultValue(true);
+            b.Property(x => x.ShowFooter).HasDefaultValue(true);
         });
         modelBuilder.Entity<Customer>(b =>
         {

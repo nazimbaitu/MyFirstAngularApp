@@ -6,24 +6,25 @@ ShopKhata contains the existing Angular application and an ASP.NET Core 8 Clean 
 
 * `src/ShopKhata.Domain` — entities, domain enums, exceptions, and the Money value object.
 * `src/ShopKhata.Application` — MediatR requests/handlers, DTOs, and application ports.
-* `src/ShopKhata.Infrastructure` — EF Core SQLite persistence, migration factory, and PBKDF2 credential hashing.
+* `src/ShopKhata.Infrastructure` — EF Core SQL Server persistence, migrations, and PBKDF2 credential hashing.
 * `src/ShopKhata.WebApi` — JWT-authenticated API, controllers, authorization, CORS, and exception handling.
 * `tests/ShopKhata.Tests` — domain unit tests.
 
-The API covers authentication, customers, khata transactions, payments, employees, daily/monthly/outstanding reports, shop settings, and notifications. All shop-owned data is scoped to the authenticated `shop_id` claim. No migration source is checked in; generate it after the model is ready using the sequence below.
+The API covers authentication, customers, khata transactions, payments, employees, daily/monthly/outstanding reports, shop settings, and notifications. All shop-owned data is scoped to the authenticated `shop_id` claim. There are no delete routes; transactions can be cancelled using their existing cancellation route.
 
 ## Database migrations
 
-Run these commands from the repository root in PowerShell. They generate the migration from the current EF model (do not create migration files by hand), then apply it:
+Run these commands from the repository root in PowerShell to apply the checked-in migrations without replacing existing database records:
 
 ```powershell
 dotnet tool install --global dotnet-ef --version 8.0.22
 dotnet restore ShopKhata.sln
-dotnet ef migrations add InitialCreate --project src\ShopKhata.Infrastructure\ShopKhata.Infrastructure.csproj --startup-project src\ShopKhata.WebApi\ShopKhata.WebApi.csproj --context ShopKhataDbContext --output-dir Persistence\Migrations
 dotnet ef database update --project src\ShopKhata.Infrastructure\ShopKhata.Infrastructure.csproj --startup-project src\ShopKhata.WebApi\ShopKhata.WebApi.csproj --context ShopKhataDbContext
 ```
 
-`dotnet-ef` can be updated with `dotnet tool update --global dotnet-ef --version 8.0.22`. The API applies existing migrations at startup. To initialize a development owner, set `Seed__Enabled=true`, `Seed__OwnerUserName`, and a strong `Seed__OwnerPassword`; seeding is disabled by default. In non-development environments, supply `Jwt__SigningKey` from a secret store (at least 32 bytes), and configure the database connection string and CORS origins.
+`dotnet-ef` can be updated with `dotnet tool update --global dotnet-ef --version 8.0.22`. The API applies existing migrations at startup. Database seeding is disabled by default and never inserts sample customers, transactions, payments, or notifications.
+
+To provision an owner account, opt in with `Seed__Enabled=true` and provide `Seed__OwnerUserName`, `Seed__OwnerPassword` (at least 12 characters), and `Seed__OwnerName` through environment variables or a secret store. If the database has exactly one shop and no user accounts, the initializer adds the owner account to that shop without changing its existing records. If there is no shop, also provide `Seed__ShopName`; only the shop, its settings, the owner account, and the owner employee record are created. To explicitly add an additional owner when accounts already exist, also set `Seed__AllowAdditionalOwner=true`; this only adds the configured owner to a single existing shop and does not change existing accounts or passwords. It refuses to choose between multiple shops and does not recreate an account whose username already exists. Never commit credentials to source control. In non-development environments, also supply `Jwt__SigningKey` (at least 32 bytes), the database connection string, and allowed CORS origins.
 
 ## Build and run the API
 
@@ -34,8 +35,8 @@ dotnet test ShopKhata.sln --no-build
 dotnet run --project src\ShopKhata.WebApi\ShopKhata.WebApi.csproj
 ```
 
-Swagger is enabled in development. Authentication is `POST /api/auth/login` with `{ "userName": "...", "password": "..." }`; send the returned bearer token for the other API routes.
+Swagger is enabled in development at `http://localhost:5116/swagger`. Sign in from the Angular login page using an existing account; the app sends the returned bearer token with API requests. The Angular development API URL is `http://localhost:5116/api`. Production builds use the same-origin `/api` path and require a reverse proxy to the API.
 
 ## Angular development
 
-Run `npm install` once and `npm start` to launch the retained Angular client at `http://localhost:4200/`. `npm run build` builds the frontend.
+Run `npm install` once and `npm start` to launch the Angular client at `http://localhost:4200/`. `npm run build` builds the frontend and `npm test -- --watch=false` runs the Angular tests. The client reads and writes data through the API; it does not seed or cache business records in browser storage.

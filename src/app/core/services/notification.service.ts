@@ -1,21 +1,36 @@
 import { Injectable, inject } from '@angular/core';
-import { BehaviorSubject, Observable, map } from 'rxjs';
+import { Observable, firstValueFrom, forkJoin, map } from 'rxjs';
 import { DataService } from './data.service';
+import { ApiService, apiErrorMessage } from './api.service';
+import { ToastService } from './toast.service';
 import { AppNotification } from '../models/notification.model';
-import { nowISO, uid } from '../utils/formatters';
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private data = inject(DataService);
-  private notificationsSubject = new BehaviorSubject<AppNotification[]>(this.data.getNotifications());
-  notifications$: Observable<AppNotification[]> = this.notificationsSubject.asObservable();
+  private api = inject(ApiService);
+  private toast = inject(ToastService);
+  notifications$: Observable<AppNotification[]> = this.data.notifications$;
   unreadCount$: Observable<number> = this.notifications$.pipe(map(list => list.filter(n => !n.read).length));
-  add(type: AppNotification['type'], title: string, message: string): void {
-    const list = this.data.getNotifications();
-    list.unshift({ id:uid('N'), type, title, message, time:nowISO(), read:false });
-    const capped = list.slice(0,100);
-    this.data.saveNotifications(capped); this.refresh();
+
+  async markAllRead(): Promise<void> {
+    const unread = this.data.getNotifications().filter(item => !item.read);
+    if (!unread.length) return;
+    try {
+      await firstValueFrom(forkJoin(unread.map(item =>
+        this.api.post<void>(`/notifications/${item.id}/read`, {}),
+      )));
+      await firstValueFrom(this.data.reloadNotifications());
+    } catch (error) {
+      this.toast.show('Update Failed', apiErrorMessage(error), 'error');
+    }
   }
-  markAllRead(): void { const list=this.data.getNotifications().map(n=>({...n,read:true})); this.data.saveNotifications(list); this.refresh(); }
-  markRead(id:string): void { const list=this.data.getNotifications().map(n=>n.id===id?{...n,read:true}:n); this.data.saveNotifications(list); this.refresh(); }
-  refresh(): void { this.notificationsSubject.next(this.data.getNotifications()); }
+
+  async markRead(id: string): Promise<void> {
+    try {
+      await firstValueFrom(this.api.post<void>(`/notifications/${id}/read`, {}));
+      await firstValueFrom(this.data.reloadNotifications());
+    } catch (error) {
+      this.toast.show('Update Failed', apiErrorMessage(error), 'error');
+    }
+  }
 }

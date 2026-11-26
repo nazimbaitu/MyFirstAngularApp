@@ -1,12 +1,78 @@
-import { Component,OnInit,inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { HttpParams } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { LayoutService } from '../../../core/services/layout.service';
 import { DataService } from '../../../core/services/data.service';
-import { todayISO,fmtAmount } from '../../../core/utils/formatters';
+import { ApiService, apiErrorMessage } from '../../../core/services/api.service';
+import { ReportSummaryDto } from '../../../core/models/api.models';
+import { todayISO } from '../../../core/utils/formatters';
 import { CurrencyFormatPipe } from '../../../shared/pipes/currency-format.pipe';
-@Component({selector:'app-monthly-summary',standalone:true,imports:[FormsModule,CurrencyFormatPipe],template:`<div class="page-head"><h1>Monthly Summary</h1><input type="month" [(ngModel)]="month" (change)="load()"></div><div class="stats-grid"><div class="stat-card orange"><span>Khata Entries</span><strong>{{txCount}}</strong><small>{{txTotal|currencyFormat}}</small></div><div class="stat-card green"><span>Payments</span><strong>{{payCount}}</strong><small>{{payTotal|currencyFormat}}</small></div></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Entries Amount</th><th>Payments Amount</th></tr></thead><tbody>@for(d of days;track d.date){<tr><td>{{d.date}}</td><td class="amount text-orange">{{d.entries|currencyFormat}}</td><td class="amount text-green">{{d.payments|currencyFormat}}</td></tr>} @empty{<tr><td colspan="3" class="text-center">No activity</td></tr>}</tbody></table></div>`})
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+
+@Component({
+  selector: 'app-monthly-summary',
+  standalone: true,
+  imports: [FormsModule, CurrencyFormatPipe, EmptyStateComponent],
+  template: `
+    <div class="page-head"><h1>Monthly Summary</h1><input type="month" [(ngModel)]="month" (change)="load()"></div>
+    @if (loading) { <p role="status">Loading report…</p> }
+    @if (error) { <p class="field-error" role="alert">{{error}}</p> }
+    @if (!loading && !error) {
+      <div class="stats-grid"><div class="stat-card orange"><span>Khata Entries</span><strong>{{summary?.transactions ?? 0}}</strong><small>{{(summary?.sales ?? 0)|currencyFormat}}</small></div><div class="stat-card green"><span>Payments</span><strong>{{paymentCount}}</strong><small>{{(summary?.payments ?? 0)|currencyFormat}}</small></div></div>
+      @if (days.length) {
+        <div class="card table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Entries Amount</th><th>Payments Amount</th></tr></thead><tbody>@for(d of days;track d.date){<tr><td>{{d.date}}</td><td class="amount text-orange">{{d.entries|currencyFormat}}</td><td class="amount text-green">{{d.payments|currencyFormat}}</td></tr>}</tbody></table></div>
+      } @else {
+        <app-empty-state icon="fa-calendar-alt" title="No activity" message="No transactions or payments were recorded this month."></app-empty-state>
+      }
+    }
+  `,
+})
 export class MonthlySummaryComponent implements OnInit {
-  private layout=inject(LayoutService);private data=inject(DataService);month=todayISO().slice(0,7);txCount=0;txTotal=0;payCount=0;payTotal=0;days:any[]=[];
-  ngOnInit(){this.layout.setTitle('Monthly Summary');this.load();}
-  load(){const tx=this.data.getTransactions().filter(t=>t.status==='Completed'&&!t.reversed&&t.dateTime.slice(0,7)===(this.month));const pay=this.data.getPayments().filter(p=>p.status==='Completed'&&p.dateTime.slice(0,7)===(this.month));this.txCount=tx.length;this.txTotal=tx.reduce((s,t)=>s+Math.round(t.total*100),0)/100;this.payCount=pay.length;this.payTotal=pay.reduce((s,p)=>s+Math.round(p.amount*100),0)/100;const map=new Map<string,{entries:number,payments:number}>();for(const t of tx){const k=t.dateTime.slice(0,10),v=map.get(k)||{entries:0,payments:0};v.entries+=Math.round(t.total*100)/100;map.set(k,v);}for(const p of pay){const k=p.dateTime.slice(0,10),v=map.get(k)||{entries:0,payments:0};v.payments+=Math.round(p.amount*100)/100;map.set(k,v);}this.days=[...map.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([date,v])=>({date,...v}));}
+  private readonly layout = inject(LayoutService);
+  private readonly data = inject(DataService);
+  private readonly api = inject(ApiService);
+  month = todayISO().slice(0, 7);
+  summary: ReportSummaryDto | null = null;
+  paymentCount = 0;
+  days: { date: string; entries: number; payments: number }[] = [];
+  loading = false;
+  error = '';
+
+  ngOnInit(): void {
+    this.layout.setTitle('Monthly Summary');
+    void this.load();
+  }
+
+  async load(): Promise<void> {
+    this.loading = true;
+    this.error = '';
+    try {
+      const [yearText, monthText] = this.month.split('-');
+      const params = new HttpParams().set('year', Number(yearText)).set('month', Number(monthText));
+      this.summary = await firstValueFrom(this.api.get<ReportSummaryDto>('/reports/monthly', params));
+      const transactions = this.data.getTransactions().filter(tx =>
+        tx.status === 'Completed' && !tx.reversed && tx.dateTime.slice(0, 7) === this.month,
+      );
+      const payments = this.data.getPayments().filter(payment => payment.dateTime.slice(0, 7) === this.month);
+      this.paymentCount = payments.length;
+      const daily = new Map<string, { entries: number; payments: number }>();
+      for (const transaction of transactions) {
+        const values = daily.get(transaction.dateTime.slice(0, 10)) ?? { entries: 0, payments: 0 };
+        values.entries += transaction.total;
+        daily.set(transaction.dateTime.slice(0, 10), values);
+      }
+      for (const payment of payments) {
+        const values = daily.get(payment.dateTime.slice(0, 10)) ?? { entries: 0, payments: 0 };
+        values.payments += payment.amount;
+        daily.set(payment.dateTime.slice(0, 10), values);
+      }
+      this.days = [...daily.entries()].sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, values]) => ({ date, ...values }));
+    } catch (error) {
+      this.error = apiErrorMessage(error);
+    } finally {
+      this.loading = false;
+    }
+  }
 }
