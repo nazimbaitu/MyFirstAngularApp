@@ -1,0 +1,12 @@
+import { Component,OnInit,inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { LayoutService } from '../../../core/services/layout.service';
+import { DataService } from '../../../core/services/data.service';
+import { todayISO,fmtAmount } from '../../../core/utils/formatters';
+import { CurrencyFormatPipe } from '../../../shared/pipes/currency-format.pipe';
+@Component({selector:'app-monthly-summary',standalone:true,imports:[FormsModule,CurrencyFormatPipe],template:`<div class="page-head"><h1>Monthly Summary</h1><input type="month" [(ngModel)]="month" (change)="load()"></div><div class="stats-grid"><div class="stat-card orange"><span>Khata Entries</span><strong>{{txCount}}</strong><small>{{txTotal|currencyFormat}}</small></div><div class="stat-card green"><span>Payments</span><strong>{{payCount}}</strong><small>{{payTotal|currencyFormat}}</small></div></div><div class="card table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Entries Amount</th><th>Payments Amount</th></tr></thead><tbody>@for(d of days;track d.date){<tr><td>{{d.date}}</td><td class="amount text-orange">{{d.entries|currencyFormat}}</td><td class="amount text-green">{{d.payments|currencyFormat}}</td></tr>} @empty{<tr><td colspan="3" class="text-center">No activity</td></tr>}</tbody></table></div>`})
+export class MonthlySummaryComponent implements OnInit {
+  private layout=inject(LayoutService);private data=inject(DataService);month=todayISO().slice(0,7);txCount=0;txTotal=0;payCount=0;payTotal=0;days:any[]=[];
+  ngOnInit(){this.layout.setTitle('Monthly Summary');this.load();}
+  load(){const tx=this.data.getTransactions().filter(t=>t.status==='Completed'&&!t.reversed&&t.dateTime.slice(0,7)===(this.month));const pay=this.data.getPayments().filter(p=>p.status==='Completed'&&p.dateTime.slice(0,7)===(this.month));this.txCount=tx.length;this.txTotal=tx.reduce((s,t)=>s+Math.round(t.total*100),0)/100;this.payCount=pay.length;this.payTotal=pay.reduce((s,p)=>s+Math.round(p.amount*100),0)/100;const map=new Map<string,{entries:number,payments:number}>();for(const t of tx){const k=t.dateTime.slice(0,10),v=map.get(k)||{entries:0,payments:0};v.entries+=Math.round(t.total*100)/100;map.set(k,v);}for(const p of pay){const k=p.dateTime.slice(0,10),v=map.get(k)||{entries:0,payments:0};v.payments+=Math.round(p.amount*100)/100;map.set(k,v);}this.days=[...map.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([date,v])=>({date,...v}));}
+}

@@ -1,0 +1,24 @@
+import { Component, OnInit, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { LayoutService } from '../../../core/services/layout.service';
+import { DataService } from '../../../core/services/data.service';
+import { PrintService } from '../../../core/services/print.service';
+import { ModalService } from '../../../core/services/modal.service';
+import { Payment } from '../../../core/models/payment.model';
+import { fmtAmount, fmtDateTime, esc } from '../../../core/utils/formatters';
+import { CurrencyFormatPipe } from '../../../shared/pipes/currency-format.pipe';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+@Component({selector:'app-payment-history',standalone:true,imports:[FormsModule,RouterLink,CurrencyFormatPipe,EmptyStateComponent],template:`
+<div class="page-head"><h1>Payment History</h1><a class="btn btn-primary" routerLink="/payments/receive"><i class="fas fa-money-bill-wave"></i> Receive Payment</a></div><div class="card toolbar"><div class="search-input-wrap"><i class="fas fa-search"></i><input [(ngModel)]="search" (ngModelChange)="apply()" placeholder="Search payments"></div><select [(ngModel)]="customerId" (change)="apply()"><option value="">All customers</option>@for(c of customers;track c.id){<option [value]="c.id">{{c.name}}</option>}</select><input type="date" [(ngModel)]="dateFrom" (change)="apply()"><input type="date" [(ngModel)]="dateTo" (change)="apply()"><button class="btn btn-outline" (click)="toggleSort()">{{desc?'Newest':'Oldest'}} First</button><button class="btn btn-outline" (click)="reset()">Reset</button></div>
+@if(filtered.length){<div class="card table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th class="sortable" (click)="toggleSort()">Date & Time</th><th>Customer</th><th>Amount</th><th>Method</th><th>Ref No.</th><th>Actions</th></tr></thead><tbody>@for(p of paged;track p.id){<tr><td>{{p.reference}}</td><td>{{fmtDate(p.dateTime)}} </td><td>{{customerName(p.customerId)}} </td><td class="amount text-green">{{p.amount|currencyFormat}}</td><td>{{p.method}}</td><td>{{p.refNumber||'—'}}</td><td><button class="btn btn-xs btn-outline" (click)="view(p)">View</button><button class="btn btn-xs btn-outline" (click)="print.printPaymentReceipt(p.id)">Print</button></td></tr>}</tbody></table><div class="pagination"><span>Showing {{showStart}}–{{showEnd}} of {{filtered.length}}</span><div>@for(pg of pages;track pg){<button class="page-btn" [class.active]="page===pg" (click)="page=pg">{{pg}}</button>}</div></div></div>}@else{<app-empty-state icon="fa-money-bill-wave" title="No payments" message="No payments match the selected filters."></app-empty-state>}`})
+export class PaymentHistoryComponent implements OnInit {
+  private layout=inject(LayoutService);private data=inject(DataService);print=inject(PrintService);private modal=inject(ModalService);
+  customers=this.data.getCustomers();payments:Payment[]=[];filtered:Payment[]=[];search='';customerId='';dateFrom='';dateTo='';desc=true;page=1;fmtDate=fmtDateTime;
+  ngOnInit(){this.layout.setTitle('Payment History');this.load();}
+  load(){this.payments=this.data.getPayments();this.apply();}
+  apply(){const q=this.search.toLowerCase();this.filtered=this.payments.filter(p=>(!q||p.reference.toLowerCase().includes(q)||this.customerName(p.customerId).toLowerCase().includes(q)||p.method.toLowerCase().includes(q))&&(!this.customerId||p.customerId===this.customerId)&&(!this.dateFrom||p.dateTime.slice(0,10)>=this.dateFrom)&&(!this.dateTo||p.dateTime.slice(0,10)<=this.dateTo)).sort((a,b)=>this.desc?b.dateTime.localeCompare(a.dateTime):a.dateTime.localeCompare(b.dateTime));this.page=1;}
+  toggleSort(){this.desc=!this.desc;this.apply();}reset(){this.search='';this.customerId='';this.dateFrom='';this.dateTo='';this.apply();}
+  customerName(id:string){return this.customers.find(c=>c.id===id)?.name||'Unknown';}get paged(){return this.filtered.slice((this.page-1)*10,this.page*10);}get pages(){return Array.from({length:Math.ceil(this.filtered.length/10)},(_,i)=>i+1);}get showStart(){return this.filtered.length?(this.page-1)*10+1:0;}get showEnd(){return Math.min(this.page*10,this.filtered.length);}
+  view(p:Payment){this.modal.open({title:`Payment ${esc(p.reference)}`,body:`<div class="detail-grid"><span class="dg-label">Customer</span><b>${esc(this.customerName(p.customerId))}</b><span class="dg-label">Amount</span><b>${fmtAmount(p.amount)}</b><span class="dg-label">Date</span><b>${esc(fmtDateTime(p.dateTime))}</b><span class="dg-label">Method</span><b>${esc(p.method)}</b><span class="dg-label">Reference</span><b>${esc(p.refNumber||'—')}</b><span class="dg-label">Notes</span><b>${esc(p.notes||'—')}</b></div>`,buttons:[{label:'Close',className:'btn-outline',close:true}]});}
+}

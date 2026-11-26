@@ -1,0 +1,15 @@
+import { Component,OnInit,inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { LayoutService } from '../../../core/services/layout.service';
+import { DataService } from '../../../core/services/data.service';
+import { todayISO,fmtAmount,fmtDateTime } from '../../../core/utils/formatters';
+import { CurrencyFormatPipe } from '../../../shared/pipes/currency-format.pipe';
+@Component({selector:'app-daily-summary',standalone:true,imports:[FormsModule,CurrencyFormatPipe],template:`
+<div class="page-head"><h1>Daily Summary</h1><input type="date" [(ngModel)]="date" (change)="load()"></div><div class="stats-grid"><div class="stat-card orange"><span>Khata Entries</span><strong>{{transactions.length}}</strong><small>{{entryTotal|currencyFormat}}</small></div><div class="stat-card green"><span>Payments</span><strong>{{payments.length}}</strong><small>{{paymentTotal|currencyFormat}}</small></div><div class="stat-card"><span>Net (Payments - Entries)</span><strong [class.text-red]="net<0" [class.text-green]="net>=0">{{net|currencyFormat}}</strong></div></div>
+<div class="card"><h3 class="card-title">Transactions</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer</th><th>Items</th><th>Amount</th><th>Time</th></tr></thead><tbody>@for(t of transactions;track t.id){<tr><td>{{t.reference}}</td><td>{{customerName(t.customerId)}} </td><td>{{items(t.items)}} </td><td class="amount">{{t.total|currencyFormat}}</td><td>{{fmtDate(t.dateTime)}} </td></tr>} @empty{<tr><td colspan="5" class="text-center">No entries</td></tr>}</tbody></table></div></div><div class="card"><h3 class="card-title">Payments</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>Reference</th><th>Customer</th><th>Amount</th><th>Method</th><th>Time</th></tr></thead><tbody>@for(p of payments;track p.id){<tr><td>{{p.reference}}</td><td>{{customerName(p.customerId)}} </td><td class="amount text-green">{{p.amount|currencyFormat}}</td><td>{{p.method}}</td><td>{{fmtDate(p.dateTime)}} </td></tr>} @empty{<tr><td colspan="5" class="text-center">No payments</td></tr>}</tbody></table></div></div>`})
+export class DailySummaryComponent implements OnInit {
+  private layout=inject(LayoutService);private data=inject(DataService);date=todayISO();transactions:any[]=[];payments:any[]=[];entryTotal=0;paymentTotal=0;net=0;fmtDate=fmtDateTime;
+  ngOnInit(){this.layout.setTitle('Daily Summary');this.load();}
+  load(){this.transactions=this.data.getTransactions().filter(t=>t.status==='Completed'&&!t.reversed&&t.dateTime.slice(0,10)===this.date);this.payments=this.data.getPayments().filter(p=>p.status==='Completed'&&p.dateTime.slice(0,10)===(this.date));this.entryTotal=this.transactions.reduce((s,t)=>s+Math.round(t.total*100),0)/100;this.paymentTotal=this.payments.reduce((s,p)=>s+Math.round(p.amount*100),0)/100;this.net=this.paymentTotal-this.entryTotal;}
+  customerName(id:string){return this.data.getCustomers().find(c=>c.id===id)?.name||'Unknown';}items(items:any[]){return items.map(i=>i.desc).join(', ');}
+}
