@@ -240,7 +240,7 @@ public sealed class ProfileHandlers(IApplicationDbContext db, ICurrentUser curre
 
 public sealed record GetShopSettingsQuery : IRequest<ShopSettingsDto>;
 public sealed record UpdateShopSettingsCommand(string ShopName, string? Phone, string Currency, string? Address,
-    string? ReceiptFooter) : IRequest<ShopSettingsDto>;
+    string? ReceiptFooter, string? WhatsAppPaymentTemplate) : IRequest<ShopSettingsDto>;
 public sealed class SettingsHandlers(IApplicationDbContext db, ICurrentUser current) :
     IRequestHandler<GetShopSettingsQuery, ShopSettingsDto>,
     IRequestHandler<UpdateShopSettingsCommand, ShopSettingsDto>
@@ -258,10 +258,11 @@ public sealed class SettingsHandlers(IApplicationDbContext db, ICurrentUser curr
         if (string.IsNullOrWhiteSpace(request.ShopName)) throw new ArgumentException("Shop name is required.");
         shop.UpdateDetails(request.ShopName, request.Phone);
         shop.EnsureSettings();
-        shop.Settings!.Update(request.Currency, request.Address, request.ReceiptFooter);
+        shop.Settings!.Update(request.Currency, request.Address, request.ReceiptFooter, request.WhatsAppPaymentTemplate);
         await db.SaveChangesAsync(ct); return Map(shop);
     }
-    private static ShopSettingsDto Map(Shop s) => new(s.Name, s.Phone, s.Settings?.Currency ?? "INR", s.Settings?.Address, s.Settings?.ReceiptFooter);
+    private static ShopSettingsDto Map(Shop s) => new(s.Name, s.Phone, s.Settings?.Currency ?? "INR",
+        s.Settings?.Address, s.Settings?.ReceiptFooter, s.Settings?.WhatsAppPaymentTemplate);
 }
 
 public sealed record GetNotificationsQuery : IRequest<IReadOnlyList<NotificationDto>>;

@@ -17,7 +17,7 @@ const KEYS = {
 @Injectable({ providedIn: 'root' })
 export class DataService {
   private storage = inject(StorageService);
-  getSettings(): ShopSettings { return this.storage.get(KEYS.SETTINGS, { shopName:'ShopKhata', ownerName:'Muhammad Aslam', logo:'', mobile:'0300-1234567', address:'Main Bazaar, Lahore, Pakistan', currency:'PKR', receiptFooter:'Thank you for your business!' }); }
+  getSettings(): ShopSettings { return this.storage.get(KEYS.SETTINGS, { shopName:'ShopKhata', ownerName:'Muhammad Aslam', logo:'', mobile:'0300-1234567', address:'Main Bazaar, Lahore, Pakistan', currency:'PKR', receiptFooter:'Thank you for your business!', whatsAppPaymentTemplate:'' }); }
   saveSettings(s: ShopSettings): void { this.storage.set(KEYS.SETTINGS, s); }
   getReceiptSettings(): ReceiptSettings { return this.storage.get(KEYS.RECEIPT, { showMobile:true, showAddress:true, showFooter:true }); }
   saveReceiptSettings(s: ReceiptSettings): void { this.storage.set(KEYS.RECEIPT, s); }

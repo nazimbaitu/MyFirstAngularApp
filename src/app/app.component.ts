@@ -59,6 +59,7 @@ export class AppComponent implements OnInit {
         shopName: settings.shopName, ownerName: profile.name, logo: '',
         mobile: settings.phone || '', address: settings.address || '',
         currency: settings.currency, receiptFooter: settings.receiptFooter || '',
+        whatsAppPaymentTemplate: settings.whatsAppPaymentTemplate || '',
       });
       this.data.saveProfile({
         name: profile.name, username: profile.userName,

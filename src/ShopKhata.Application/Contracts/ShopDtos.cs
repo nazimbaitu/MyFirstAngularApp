@@ -16,7 +16,8 @@ public sealed record PaymentDto(Guid Id, string Reference, string CustomerId, de
     DateTime DateTimeUtc, PaymentMethod Method, string? ReferenceNumber, string? Notes, Guid CreatedBy);
 public sealed record EmployeeDto(Guid Id, string Name, string UserName, string? Mobile, EmployeeRole Role,
     RecordStatus Status, DateTime CreatedAtUtc);
-public sealed record ShopSettingsDto(string ShopName, string? Phone, string Currency, string? Address, string? ReceiptFooter);
+public sealed record ShopSettingsDto(string ShopName, string? Phone, string Currency, string? Address,
+    string? ReceiptFooter, string? WhatsAppPaymentTemplate);
 public sealed record NotificationDto(Guid Id, string Title, string Message, bool IsRead, DateTime CreatedAtUtc);
 public sealed record OutstandingDto(string CustomerId, string CustomerName, string Mobile, decimal Balance);
 public sealed record ReportSummaryDto(DateOnly Date, decimal Sales, decimal Payments, int Transactions, int Customers);

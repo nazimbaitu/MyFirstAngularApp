@@ -6,6 +6,7 @@ export interface ShopSettings {
   address: string;
   currency: string;
   receiptFooter: string;
+  whatsAppPaymentTemplate?: string;
 }
 export interface ReceiptSettings {
   showMobile: boolean;
