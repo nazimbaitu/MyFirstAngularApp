@@ -36,11 +36,11 @@ public static class DatabaseInitializer
             new Employee(shop.Id, "Sara Khan", "sara.k", EmployeeRole.Cashier, "0311-2223333"),
             new Employee(shop.Id, "Hamza Ali", "hamza.a", EmployeeRole.Cashier, "0312-4445555"));
 
-        var ali = new Customer(shop.Id, "Ali Hassan", "0301-1112222", 500, "Model Town Lahore", "Regular customer");
-        var ahmed = new Customer(shop.Id, "Ahmed Khan", "0302-3334444", 0, "Gulberg Lahore");
-        var bilal = new Customer(shop.Id, "Bilal Ahmed", "0303-5556666", 1200, "Johar Town", "Bulk buyer");
-        var usman = new Customer(shop.Id, "Usman Tariq", "0304-7778888", 0, "DHA Phase 5");
-        var farhan = new Customer(shop.Id, "Farhan Malik", "0305-9990000", 350, "Iqbal Town", "Prefers cash");
+        var ali = new Customer("NK000001", shop.Id, "Ali Hassan", "0301-1112222", 500, "Model Town Lahore", "Regular customer");
+        var ahmed = new Customer("NK000002", shop.Id, "Ahmed Khan", "0302-3334444", 0, "Gulberg Lahore");
+        var bilal = new Customer("NK000003", shop.Id, "Bilal Ahmed", "0303-5556666", 1200, "Johar Town", "Bulk buyer");
+        var usman = new Customer("NK000004", shop.Id, "Usman Tariq", "0304-7778888", 0, "DHA Phase 5");
+        var farhan = new Customer("NK000005", shop.Id, "Farhan Malik", "0305-9990000", 350, "Iqbal Town", "Prefers cash");
         farhan.SetStatus(RecordStatus.Inactive);
         db.Customers.AddRange(ali, ahmed, bilal, usman, farhan);
 

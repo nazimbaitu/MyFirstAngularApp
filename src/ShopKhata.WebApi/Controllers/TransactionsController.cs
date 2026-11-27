@@ -12,7 +12,7 @@ namespace ShopKhata.WebApi.Controllers;
 public sealed class TransactionsController(IMediator mediator) : ControllerBase
 {
     [HttpGet]
-    public Task<IReadOnlyList<TransactionDto>> List([FromQuery] Guid? customerId, [FromQuery] DateOnly? from,
+    public Task<IReadOnlyList<TransactionDto>> List([FromQuery] string? customerId, [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to, CancellationToken ct) => mediator.Send(new GetTransactionsQuery(customerId, from, to), ct);
 
     [HttpPost]
@@ -27,5 +27,5 @@ public sealed class TransactionsController(IMediator mediator) : ControllerBase
         await mediator.Send(new CancelTransactionCommand(id), ct) ? NoContent() : NotFound();
 }
 
-public sealed record CreateTransactionInput(Guid CustomerId, DateTime? DateTimeUtc,
+public sealed record CreateTransactionInput(string CustomerId, DateTime? DateTimeUtc,
     IReadOnlyList<TransactionItemDto> Items, string? Notes = null);

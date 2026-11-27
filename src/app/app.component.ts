@@ -30,7 +30,8 @@ export class AppComponent implements OnInit {
         this.api.get<any>('/profile'),
       ]);
       this.data.saveCustomers(customers.map(x => ({
-        id: x.id, name: x.name, mobile: x.mobile, address: x.address,
+        id: x.id, name: x.name, mobile: x.mobile, secondaryMobile: x.secondaryMobile,
+        additionalMobile: x.additionalMobile, photoUrl: x.photoUrl, address: x.address,
         openingBalance: x.openingBalance, notes: x.notes, createdDate: x.createdAtUtc,
         status: x.status === 1 || x.status === 'Inactive' ? 'Inactive' : 'Active',
       })));

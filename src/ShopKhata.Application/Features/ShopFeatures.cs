@@ -8,41 +8,64 @@ using ShopKhata.Domain.Enums;
 namespace ShopKhata.Application.Features;
 
 public sealed record GetCustomersQuery : IRequest<IReadOnlyList<CustomerDto>>;
-public sealed record GetCustomerQuery(Guid Id) : IRequest<CustomerDto?>;
-public sealed record SaveCustomerCommand(Guid? Id, string Name, string Mobile, string? Address,
-    decimal OpeningBalance, string? Notes) : IRequest<CustomerDto>;
-public sealed record SetCustomerStatusCommand(Guid Id, RecordStatus Status) : IRequest<bool>;
+public sealed record GetCustomerQuery(string Id) : IRequest<CustomerDetailDto?>;
+public sealed record CreateCustomerCommand(string Name, string Mobile, string? SecondaryMobile,
+    string? AdditionalMobile, string? Address, decimal OpeningBalance, string? Notes) : IRequest<CustomerDto>;
+public sealed record UpdateCustomerCommand(string Id, string Name, string Mobile, string? SecondaryMobile,
+    string? AdditionalMobile, string? Address, decimal OpeningBalance, string? Notes) : IRequest<CustomerDto>;
+public sealed record UpdateCustomerPhotoCommand(string Id, string PhotoUrl) : IRequest<bool>;
+public sealed record SetCustomerStatusCommand(string Id, RecordStatus Status) : IRequest<bool>;
 
 public sealed class CustomerHandlers(IApplicationDbContext db, ICurrentUser current) :
     IRequestHandler<GetCustomersQuery, IReadOnlyList<CustomerDto>>,
-    IRequestHandler<GetCustomerQuery, CustomerDto?>,
-    IRequestHandler<SaveCustomerCommand, CustomerDto>,
+    IRequestHandler<GetCustomerQuery, CustomerDetailDto?>,
+    IRequestHandler<CreateCustomerCommand, CustomerDto>,
+    IRequestHandler<UpdateCustomerCommand, CustomerDto>,
+    IRequestHandler<UpdateCustomerPhotoCommand, bool>,
     IRequestHandler<SetCustomerStatusCommand, bool>
 {
     public async Task<IReadOnlyList<CustomerDto>> Handle(GetCustomersQuery request, CancellationToken ct) =>
         await db.Customers.AsNoTracking().Where(x => x.ShopId == current.ShopId)
             .OrderBy(x => x.Name).Select(x => Map(x)).ToListAsync(ct);
-    public async Task<CustomerDto?> Handle(GetCustomerQuery request, CancellationToken ct)
+    public async Task<CustomerDetailDto?> Handle(GetCustomerQuery request, CancellationToken ct)
     {
         var entity = await db.Customers.AsNoTracking().FirstOrDefaultAsync(x => x.ShopId == current.ShopId && x.Id == request.Id, ct);
-        return entity is null ? null : Map(entity);
+        return entity is null ? null : MapDetail(entity);
     }
-    public async Task<CustomerDto> Handle(SaveCustomerCommand request, CancellationToken ct)
+    public async Task<CustomerDto> Handle(CreateCustomerCommand request, CancellationToken ct)
     {
-        Customer entity;
-        if (request.Id is { } id)
-        {
-            entity = await db.Customers.FirstOrDefaultAsync(x => x.ShopId == current.ShopId && x.Id == id, ct)
-                ?? throw new KeyNotFoundException("Customer not found.");
-            entity.Update(request.Name, request.Mobile, request.Address, request.OpeningBalance, request.Notes);
-        }
-        else
-        {
-            entity = new Customer(RequireShop(), request.Name, request.Mobile, request.OpeningBalance, request.Address, request.Notes);
-            db.Customers.Add(entity);
-        }
+        if (string.IsNullOrWhiteSpace(request.Mobile))
+            throw new ArgumentException("Customer mobile is required.");
+        var mobile = request.Mobile.Trim();
+        if (await db.Customers.AnyAsync(x => x.Mobile == mobile, ct))
+            throw new ArgumentException("This mobile number is already registered.");
+        var entity = new Customer(await NextCustomerId(ct), RequireShop(), request.Name, mobile,
+            request.OpeningBalance, request.Address, request.Notes, request.SecondaryMobile, request.AdditionalMobile);
+        db.Customers.Add(entity);
         await db.SaveChangesAsync(ct);
         return Map(entity);
+    }
+    public async Task<CustomerDto> Handle(UpdateCustomerCommand request, CancellationToken ct)
+    {
+        var entity = await db.Customers.FirstOrDefaultAsync(x => x.ShopId == current.ShopId && x.Id == request.Id, ct)
+            ?? throw new KeyNotFoundException("Customer not found.");
+        if (string.IsNullOrWhiteSpace(request.Mobile))
+            throw new ArgumentException("Customer mobile is required.");
+        var mobile = request.Mobile.Trim();
+        if (await db.Customers.AnyAsync(x => x.Id != request.Id && x.Mobile == mobile, ct))
+            throw new ArgumentException("This mobile number is already registered.");
+        entity.Update(request.Name, mobile, request.SecondaryMobile, request.AdditionalMobile,
+            request.Address, request.OpeningBalance, request.Notes);
+        await db.SaveChangesAsync(ct);
+        return Map(entity);
+    }
+    public async Task<bool> Handle(UpdateCustomerPhotoCommand request, CancellationToken ct)
+    {
+        var entity = await db.Customers.FirstOrDefaultAsync(x => x.ShopId == current.ShopId && x.Id == request.Id, ct);
+        if (entity is null) return false;
+        entity.UpdatePhoto(request.PhotoUrl);
+        await db.SaveChangesAsync(ct);
+        return true;
     }
     public async Task<bool> Handle(SetCustomerStatusCommand request, CancellationToken ct)
     {
@@ -51,12 +74,27 @@ public sealed class CustomerHandlers(IApplicationDbContext db, ICurrentUser curr
         entity.SetStatus(request.Status); await db.SaveChangesAsync(ct); return true;
     }
     private Guid RequireShop() => current.ShopId ?? throw new UnauthorizedAccessException("An authenticated shop is required.");
-    private static CustomerDto Map(Customer x) => new(x.Id, x.Name, x.Mobile, x.Address, x.OpeningBalance, x.Notes, x.Status, x.CreatedAtUtc);
+    private async Task<string> NextCustomerId(CancellationToken ct)
+    {
+        var lastId = await db.Customers.OrderByDescending(x => x.Id).Select(x => x.Id).FirstOrDefaultAsync(ct);
+        if (lastId is null) return "NK000001";
+        if (!lastId.StartsWith("NK", StringComparison.Ordinal) ||
+            !int.TryParse(lastId.AsSpan(2), System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var lastNumber))
+            throw new InvalidOperationException($"Customer ID '{lastId}' is not in the expected NK-number format.");
+        return $"NK{checked(lastNumber + 1):D6}";
+    }
+    private static CustomerDto Map(Customer x) =>
+        new(x.Id, x.Name, x.Mobile, x.SecondaryMobile, x.AdditionalMobile, x.PhotoUrl,
+            x.Address, x.OpeningBalance, x.Notes, x.Status, x.CreatedAtUtc);
+    private static CustomerDetailDto MapDetail(Customer x) =>
+        new(x.Id, x.Name, x.Mobile, x.SecondaryMobile, x.AdditionalMobile, x.PhotoUrl,
+            x.Address, x.OpeningBalance, x.Notes, x.Status, x.CreatedAtUtc, x.UpdatedAtUtc);
 }
 
-public sealed record GetTransactionsQuery(Guid? CustomerId = null, DateOnly? From = null, DateOnly? To = null)
+public sealed record GetTransactionsQuery(string? CustomerId = null, DateOnly? From = null, DateOnly? To = null)
     : IRequest<IReadOnlyList<TransactionDto>>;
-public sealed record CreateTransactionCommand(Guid CustomerId, DateTime? DateTimeUtc, IReadOnlyList<TransactionItemDto> Items, string? Notes)
+public sealed record CreateTransactionCommand(string CustomerId, DateTime? DateTimeUtc, IReadOnlyList<TransactionItemDto> Items, string? Notes)
     : IRequest<TransactionDto>;
 public sealed record CancelTransactionCommand(Guid Id) : IRequest<bool>;
 
@@ -97,8 +135,8 @@ public sealed class TransactionHandlers(IApplicationDbContext db, ICurrentUser c
         x.Total, x.Notes, x.CreatedBy, x.Status, x.Reversed);
 }
 
-public sealed record GetPaymentsQuery(Guid? CustomerId = null) : IRequest<IReadOnlyList<PaymentDto>>;
-public sealed record CreatePaymentCommand(Guid CustomerId, decimal Amount, DateTime? DateTimeUtc, PaymentMethod Method,
+public sealed record GetPaymentsQuery(string? CustomerId = null) : IRequest<IReadOnlyList<PaymentDto>>;
+public sealed record CreatePaymentCommand(string CustomerId, decimal Amount, DateTime? DateTimeUtc, PaymentMethod Method,
     string? ReferenceNumber, string? Notes) : IRequest<PaymentDto>;
 public sealed class PaymentHandlers(IApplicationDbContext db, ICurrentUser current) :
     IRequestHandler<GetPaymentsQuery, IReadOnlyList<PaymentDto>>,

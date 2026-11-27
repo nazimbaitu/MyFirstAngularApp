@@ -38,12 +38,16 @@ public sealed class ShopKhataDbContext(DbContextOptions<ShopKhataDbContext> opti
         modelBuilder.Entity<Customer>(b =>
         {
             b.ToTable("Customers"); b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasMaxLength(20).ValueGeneratedNever();
             b.Property(x => x.Name).HasMaxLength(160).IsRequired();
             b.Property(x => x.Mobile).HasMaxLength(32).IsRequired();
+            b.Property(x => x.SecondaryMobile).HasMaxLength(20);
+            b.Property(x => x.AdditionalMobile).HasMaxLength(20);
+            b.Property(x => x.PhotoUrl).HasMaxLength(500);
             b.Property(x => x.Address).HasMaxLength(500); b.Property(x => x.Notes).HasMaxLength(2000);
             b.Property(x => x.OpeningBalance).HasPrecision(18, 2);
             b.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
-            b.HasIndex(x => new { x.ShopId, x.Mobile });
+            b.HasIndex(x => x.Mobile).IsUnique();
             b.HasOne<Shop>().WithMany().HasForeignKey(x => x.ShopId).OnDelete(DeleteBehavior.Cascade);
         });
         modelBuilder.Entity<KhataTransaction>(b =>
@@ -119,6 +123,11 @@ public sealed class ShopKhataDbContext(DbContextOptions<ShopKhataDbContext> opti
             if (entry.State == EntityState.Added) entry.Property(nameof(ShopKhata.Domain.Common.Entity.CreatedAtUtc)).CurrentValue = now;
             if (entry.State is EntityState.Added or EntityState.Modified)
                 entry.Property(nameof(ShopKhata.Domain.Common.Entity.UpdatedAtUtc)).CurrentValue = now;
+        }
+        foreach (var entry in ChangeTracker.Entries<Customer>())
+        {
+            if (entry.State == EntityState.Added) entry.Entity.SetCreatedAtUtc(now);
+            if (entry.State is EntityState.Added or EntityState.Modified) entry.Entity.SetUpdatedAtUtc(now);
         }
         return base.SaveChangesAsync(cancellationToken);
     }

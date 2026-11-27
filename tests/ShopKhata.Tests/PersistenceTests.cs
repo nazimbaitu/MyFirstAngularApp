@@ -19,7 +19,8 @@ public sealed class PersistenceTests
 
         var shop = new Shop("Corner Shop");
         shop.EnsureSettings();
-        var customer = new Customer(shop.Id, "A. Customer", "5551234", 10);
+        var customer = new Customer("NK000001", shop.Id, "A. Customer", "5551234", 10,
+            secondaryMobile: "5554321", additionalMobile: "5559876");
         var transaction = new KhataTransaction(shop.Id, customer.Id, "KH-TEST", DateTime.UtcNow, Guid.NewGuid());
         transaction.AddItem("Rice", 2, 1.25m);
         var payment = new Payment(shop.Id, customer.Id, "PM-TEST", 5, DateTime.UtcNow, PaymentMethod.Cash, Guid.NewGuid());
@@ -33,5 +34,11 @@ public sealed class PersistenceTests
         Assert.Equal(2.50m, saved.Total);
         Assert.Equal("Corner Shop", await db.Shops.Select(x => x.Name).SingleAsync());
         Assert.Equal(5m, await db.Payments.Select(x => x.Amount).SingleAsync());
+        var savedCustomer = await db.Customers.SingleAsync();
+        Assert.Equal("NK000001", savedCustomer.Id);
+        Assert.Equal("5554321", savedCustomer.SecondaryMobile);
+        Assert.Equal("5559876", savedCustomer.AdditionalMobile);
+        db.Customers.Add(new Customer("NK000002", shop.Id, "Another Customer", "5551234"));
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
 }

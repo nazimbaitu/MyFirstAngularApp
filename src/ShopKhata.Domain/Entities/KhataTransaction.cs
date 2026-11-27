@@ -6,7 +6,7 @@ namespace ShopKhata.Domain.Entities;
 public sealed class KhataTransaction : Entity
 {
     private KhataTransaction() { }
-    public KhataTransaction(Guid shopId, Guid customerId, string reference, DateTime dateTimeUtc, Guid createdBy, string? notes = null)
+    public KhataTransaction(Guid shopId, string customerId, string reference, DateTime dateTimeUtc, Guid createdBy, string? notes = null)
     {
         if (string.IsNullOrWhiteSpace(reference)) throw new DomainException("Transaction reference is required.");
         ShopId = shopId; CustomerId = customerId; Reference = reference.Trim();
@@ -15,7 +15,7 @@ public sealed class KhataTransaction : Entity
     }
 
     public Guid ShopId { get; private set; }
-    public Guid CustomerId { get; private set; }
+    public string CustomerId { get; private set; } = string.Empty;
     public Customer? Customer { get; private set; }
     public string Reference { get; private set; } = string.Empty;
     public DateTime DateTimeUtc { get; private set; }

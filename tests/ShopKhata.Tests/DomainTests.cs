@@ -1,5 +1,6 @@
 using ShopKhata.Domain.Common;
 using ShopKhata.Domain.Entities;
+using ShopKhata.Domain.Enums;
 using ShopKhata.Domain.ValueObjects;
 
 namespace ShopKhata.Tests;
@@ -16,14 +17,17 @@ public sealed class DomainTests
     [Fact]
     public void Customer_requires_identity_and_nonnegative_opening_balance()
     {
-        Assert.Throws<DomainException>(() => new Customer(Guid.NewGuid(), "", "5551234"));
-        Assert.Throws<DomainException>(() => new Customer(Guid.NewGuid(), "Ada", "5551234", -1));
+        Assert.Throws<DomainException>(() => new Customer("", Guid.NewGuid(), "Ada", "5551234"));
+        Assert.Throws<DomainException>(() => new Customer("NK000001", Guid.NewGuid(), "", "5551234"));
+        Assert.Throws<DomainException>(() => new Customer("NK000001", Guid.NewGuid(), "Ada", "5551234", -1));
+        Assert.Throws<DomainException>(() => new Customer("NK000001", Guid.NewGuid(), "Ada", "5551234",
+            secondaryMobile: new string('1', 21)));
     }
 
     [Fact]
     public void Transaction_requires_positive_item_quantity_and_cannot_be_cancelled_twice()
     {
-        var transaction = new KhataTransaction(Guid.NewGuid(), Guid.NewGuid(), "KH-001", DateTime.UtcNow, Guid.NewGuid());
+        var transaction = new KhataTransaction(Guid.NewGuid(), "NK000001", "KH-001", DateTime.UtcNow, Guid.NewGuid());
         Assert.Throws<DomainException>(() => transaction.AddItem("rice", 0, 10));
         transaction.AddItem("rice", 2, 1.25m);
         Assert.Equal(2.50m, transaction.Total);

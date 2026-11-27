@@ -6,7 +6,7 @@ namespace ShopKhata.Domain.Entities;
 public sealed class Payment : Entity
 {
     private Payment() { }
-    public Payment(Guid shopId, Guid customerId, string reference, decimal amount, DateTime dateTimeUtc,
+    public Payment(Guid shopId, string customerId, string reference, decimal amount, DateTime dateTimeUtc,
         PaymentMethod method, Guid createdBy, string? referenceNumber = null, string? notes = null)
     {
         if (amount <= 0) throw new DomainException("Payment amount must be greater than zero.");
@@ -16,7 +16,7 @@ public sealed class Payment : Entity
         Method = method; CreatedBy = createdBy; ReferenceNumber = referenceNumber?.Trim(); Notes = notes?.Trim();
     }
     public Guid ShopId { get; private set; }
-    public Guid CustomerId { get; private set; }
+    public string CustomerId { get; private set; } = string.Empty;
     public Customer? Customer { get; private set; }
     public string Reference { get; private set; } = string.Empty;
     public decimal Amount { get; private set; }

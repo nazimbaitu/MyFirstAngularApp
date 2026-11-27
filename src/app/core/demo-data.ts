@@ -1,5 +1,4 @@
 import { DataService } from './services/data.service';
-import { Customer } from './models/customer.model';
 import { Transaction } from './models/transaction.model';
 import { Payment } from './models/payment.model';
 import { Employee } from './models/employee.model';
@@ -10,14 +9,10 @@ function daysAgo(days:number):string {
 }
 
 export function initDemoData(data:DataService):void {
+  const savedCustomers=data.getCustomers();
+  if(savedCustomers.some(customer=>customer.id.startsWith('CUST-')))
+    data.saveCustomers(savedCustomers.filter(customer=>!customer.id.startsWith('CUST-')));
   if(data.isInitialized()) return;
-  const customers:Customer[]=[
-    {id:'CUST-1001',name:'Ali Hassan',mobile:'0301-1112222',address:'Model Town Lahore',openingBalance:500,notes:'Regular customer',createdDate:daysAgo(40),status:'Active'},
-    {id:'CUST-1002',name:'Ahmed Khan',mobile:'0302-3334444',address:'Gulberg Lahore',openingBalance:0,createdDate:daysAgo(35),status:'Active'},
-    {id:'CUST-1003',name:'Bilal Ahmed',mobile:'0303-5556666',address:'Johar Town',openingBalance:1200,notes:'Bulk buyer',createdDate:daysAgo(30),status:'Active'},
-    {id:'CUST-1004',name:'Usman Tariq',mobile:'0304-7778888',address:'DHA Phase 5',openingBalance:0,createdDate:daysAgo(20),status:'Active'},
-    {id:'CUST-1005',name:'Farhan Malik',mobile:'0305-9990000',address:'Iqbal Town',openingBalance:350,notes:'Prefers cash',createdDate:daysAgo(15),status:'Inactive'},
-  ];
   const transactions:Transaction[]=[
     {id:'TXN-2001',reference:'SK-KH-001',customerId:'CUST-1001',dateTime:daysAgo(5),items:[{desc:'Rice (5kg)',qty:1,price:1500,total:1500},{desc:'Sugar (2kg)',qty:2,price:250,total:500}],total:2000,notes:'Monthly grocery',createdBy:'Ahmed Raza',status:'Completed',reversed:false},
     {id:'TXN-2002',reference:'SK-KH-002',customerId:'CUST-1002',dateTime:daysAgo(3),items:[{desc:'Cooking Oil (1L)',qty:2,price:650,total:1300},{desc:'Milk Pack',qty:4,price:120,total:480}],total:1780,createdBy:'Ahmed Raza',status:'Completed',reversed:false},
@@ -41,6 +36,6 @@ export function initDemoData(data:DataService):void {
   data.saveSettings({shopName:'ShopKhata',ownerName:'Muhammad Aslam',logo:'',mobile:'0300-1234567',address:'Main Bazaar, Lahore, Pakistan',currency:'PKR',receiptFooter:'Thank you for your business!'});
   data.saveReceiptSettings({showMobile:true,showAddress:true,showFooter:true});
   data.saveProfile({name:'Ahmed Raza',username:'admin',role:'Owner / Admin',mobile:'0300-7654321'});
-  data.saveCustomers(customers); data.saveTransactions(transactions); data.savePayments(payments); data.saveEmployees(employees); data.saveNotifications(notifications);
+  data.saveTransactions(transactions); data.savePayments(payments); data.saveEmployees(employees); data.saveNotifications(notifications);
   data.markInitialized();
 }

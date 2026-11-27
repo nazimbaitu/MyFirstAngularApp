@@ -13,7 +13,7 @@ namespace ShopKhata.WebApi.Controllers;
 public sealed class PaymentsController(IMediator mediator) : ControllerBase
 {
     [HttpGet]
-    public Task<IReadOnlyList<PaymentDto>> List([FromQuery] Guid? customerId, CancellationToken ct) =>
+    public Task<IReadOnlyList<PaymentDto>> List([FromQuery] string? customerId, CancellationToken ct) =>
         mediator.Send(new GetPaymentsQuery(customerId), ct);
 
     [HttpPost]
@@ -25,5 +25,5 @@ public sealed class PaymentsController(IMediator mediator) : ControllerBase
     }
 }
 
-public sealed record CreatePaymentInput(Guid CustomerId, decimal Amount, DateTime? DateTimeUtc,
+public sealed record CreatePaymentInput(string CustomerId, decimal Amount, DateTime? DateTimeUtc,
     PaymentMethod Method, string? ReferenceNumber = null, string? Notes = null);
