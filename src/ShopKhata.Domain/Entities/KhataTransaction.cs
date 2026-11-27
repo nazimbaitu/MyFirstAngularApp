@@ -38,4 +38,13 @@ public sealed class KhataTransaction : Entity
         if (Status == TransactionStatus.Cancelled) throw new DomainException("Transaction is already cancelled.");
         Status = TransactionStatus.Cancelled; Reversed = true; Touch();
     }
+
+    public void Restore()
+    {
+        if (Status != TransactionStatus.Cancelled || !Reversed)
+            throw new DomainException("Only a reversed transaction can be restored.");
+        Status = TransactionStatus.Completed;
+        Reversed = false;
+        Touch();
+    }
 }

@@ -25,6 +25,10 @@ public sealed class TransactionsController(IMediator mediator) : ControllerBase
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken ct) =>
         await mediator.Send(new CancelTransactionCommand(id), ct) ? NoContent() : NotFound();
+
+    [HttpPost("{id:guid}/uncancel")]
+    public async Task<IActionResult> Uncancel(Guid id, CancellationToken ct) =>
+        await mediator.Send(new RestoreTransactionCommand(id), ct) ? NoContent() : NotFound();
 }
 
 public sealed record CreateTransactionInput(string CustomerId, DateTime? DateTimeUtc,

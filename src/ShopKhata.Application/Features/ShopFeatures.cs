@@ -97,11 +97,13 @@ public sealed record GetTransactionsQuery(string? CustomerId = null, DateOnly? F
 public sealed record CreateTransactionCommand(string CustomerId, DateTime? DateTimeUtc, IReadOnlyList<TransactionItemDto> Items, string? Notes)
     : IRequest<TransactionDto>;
 public sealed record CancelTransactionCommand(Guid Id) : IRequest<bool>;
+public sealed record RestoreTransactionCommand(Guid Id) : IRequest<bool>;
 
 public sealed class TransactionHandlers(IApplicationDbContext db, ICurrentUser current) :
     IRequestHandler<GetTransactionsQuery, IReadOnlyList<TransactionDto>>,
     IRequestHandler<CreateTransactionCommand, TransactionDto>,
-    IRequestHandler<CancelTransactionCommand, bool>
+    IRequestHandler<CancelTransactionCommand, bool>,
+    IRequestHandler<RestoreTransactionCommand, bool>
 {
     public async Task<IReadOnlyList<TransactionDto>> Handle(GetTransactionsQuery request, CancellationToken ct)
     {
@@ -129,6 +131,12 @@ public sealed class TransactionHandlers(IApplicationDbContext db, ICurrentUser c
         var entity = await db.Transactions.FirstOrDefaultAsync(x => x.Id == request.Id && x.ShopId == current.ShopId, ct);
         if (entity is null) return false;
         entity.Cancel(); await db.SaveChangesAsync(ct); return true;
+    }
+    public async Task<bool> Handle(RestoreTransactionCommand request, CancellationToken ct)
+    {
+        var entity = await db.Transactions.FirstOrDefaultAsync(x => x.Id == request.Id && x.ShopId == current.ShopId, ct);
+        if (entity is null) return false;
+        entity.Restore(); await db.SaveChangesAsync(ct); return true;
     }
     private static TransactionDto Map(KhataTransaction x) => new(x.Id, x.Reference, x.CustomerId, x.DateTimeUtc,
         x.Items.Select(i => new TransactionItemDto(i.Description, i.Quantity, i.UnitPrice, i.Total)).ToList(),

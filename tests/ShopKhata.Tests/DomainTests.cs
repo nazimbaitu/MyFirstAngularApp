@@ -31,7 +31,13 @@ public sealed class DomainTests
         Assert.Throws<DomainException>(() => transaction.AddItem("rice", 0, 10));
         transaction.AddItem("rice", 2, 1.25m);
         Assert.Equal(2.50m, transaction.Total);
+        Assert.Throws<DomainException>(() => transaction.Restore());
         transaction.Cancel();
         Assert.Throws<DomainException>(() => transaction.Cancel());
+        transaction.Restore();
+        Assert.Equal(TransactionStatus.Completed, transaction.Status);
+        Assert.False(transaction.Reversed);
+        Assert.Throws<DomainException>(() => transaction.Restore());
     }
+
 }
